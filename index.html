@@ -1,0 +1,113 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>QR Plaquinhas</title>
+<link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#e8530e">
+<link rel="icon" href="/icon-192.png"><link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="QR Plaquinhas">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+body{font-family:system-ui,sans-serif;max-width:620px;margin:0 auto;padding:18px;background:#f3efe6;color:#17150f}
+h1{margin:0 0 14px}label{display:block;font-size:13px;margin:12px 0 4px;color:#555}
+input,button,select{font:inherit;width:100%;padding:12px;border:1.5px solid #17150f;border-radius:8px;box-sizing:border-box}
+button{background:#e8530e;color:#fff;font-weight:700;margin-top:14px;cursor:pointer}
+button.s{background:#fff;color:#17150f}
+.tabs{display:flex;gap:8px;margin:14px 0}.tabs button{margin:0;background:#fff;color:#17150f}.tabs button.on{background:#17150f;color:#fff}
+.it{display:flex;gap:8px;align-items:center;border-top:1px solid #ccc;padding:10px 0;font-size:14px}
+.it button{width:auto;margin:0;padding:6px 10px;background:#fff;color:#17150f}
+.tg{font:700 11px system-ui;padding:2px 8px;border-radius:99px;border:1.5px solid;margin:0 6px}.on{color:#1f7a45;border-color:#1f7a45}.off{color:#888;border-color:#888}
+.it .inf{flex:1;min-width:0}.it .inf small{display:block;word-break:break-all}.it .bt{display:flex;flex-direction:column;gap:6px}
+.red{background:#b00020!important;color:#fff!important}hr{border:0;border-top:1px solid #ccc;margin:22px 0}
+.row{display:flex;gap:10px}.row>div{flex:1}
+#m{margin-top:10px;font-weight:600}
+#pv{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:14px}
+#pv canvas{width:100%;height:auto;border:1px solid #ccc;background:#fff;border-radius:6px}
+small{color:#555}
+</style></head><body>
+<h1>QR Plaquinhas</h1>
+<label>Senha</label><input id="s" type="password" autocomplete="current-password">
+<div class="tabs"><button id="t1" class="on">Gerar QR Codes</button><button id="t2">QR Codes e links</button></div>
+
+<div id="v1">
+ <small id="info"></small>
+ <label>Quantos QR Codes novos?</label><input id="q" type="number" inputmode="numeric" min="1" max="500" value="10">
+ <button id="gen2">Gerar (sem baixar)</button>
+ <button id="gen" class="s">Gerar e baixar (.zip)</button>
+ <p><small>Os números sempre seguem em sequência, sem pular: se não existe nenhum QR, o primeiro lote é do Nº 1 até o Nº que você pedir; depois continua do último número em diante. O QR leva para este site e você escolhe o destino depois, na aba QR Codes e links.</small></p>
+ <label>Baixar de novo um intervalo (não cria números novos)</label>
+ <div class="row"><div><input id="de" type="number" inputmode="numeric" placeholder="Do nº"></div><div><input id="ate" type="number" inputmode="numeric" placeholder="Até o nº"></div></div>
+ <button class="s" id="rb">Baixar intervalo (.zip)</button>
+ <div id="pv"></div>
+</div>
+
+<div id="v2" style="display:none">
+ <label>Número do QR</label><input id="n" type="number" inputmode="numeric" min="1">
+ <label>Nome da loja (opcional, deixe vazio para não mudar)</label><input id="nm" maxlength="80" placeholder="Ex.: Padaria do João">
+ <label>Link de destino (vazio = desativar)</label><input id="d" inputmode="url" autocapitalize="off" placeholder="https://...">
+ <button id="go">Salvar</button>
+ <hr><small id="resumo"></small>
+ <button class="s" id="bz">Baixar todos (.zip)</button>
+ <label>Mostrar</label><select id="fl"><option value="t">Todos</option><option value="a">Só ativos</option><option value="i">Só inativos</option></select>
+ <div id="l"></div>
+ <hr><b>Apagar tudo</b>
+ <p><small>Apaga de forma permanente todos os QR Codes desta conta: links, nomes e contagem de leituras. A numeração volta ao Nº 1. Não tem como desfazer.</small></p>
+ <input id="cf" placeholder="Digite APAGAR TUDO para liberar o botão" autocapitalize="characters">
+ <button id="ap" class="red">Apagar tudo permanentemente</button>
+</div>
+<div id="m"></div>
+
+<script>
+const $=i=>document.getElementById(i),pad=n=>String(n).padStart(3,"0");$("s").value=localStorage.getItem("qrs")||"";
+let LST=null,RT="/r/";
+function tab(n){$("v1").style.display=n==1?"":"none";$("v2").style.display=n==2?"":"none";$("t1").className=n==1?"on":"";$("t2").className=n==2?"on":""}
+$("t1").onclick=()=>tab(1);$("t2").onclick=()=>tab(2);
+async function call(body){const r=await fetch("/api/admin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({senha:$("s").value,...body})});
+ const j=await r.json();if(!r.ok)throw new Error(j.erro||"Erro");localStorage.setItem("qrs",$("s").value);return j}
+function dl(n){qrCanvas(n,900).toBlob(bl=>{const a=document.createElement("a");a.href=URL.createObjectURL(bl);a.download=`qr-${pad(n)}.png`;document.body.appendChild(a);a.click();a.remove()},"image/png")}
+function draw(j){LST=j;RT=j.rota||RT;r2()}
+function r2(){const j=LST;if(!j)return;const L=j.lista;
+ $("info").textContent=`Conta ${j.conta||1}. `+(j.prox?`Último número gerado: ${j.prox}. Próximo: ${j.prox+1}.`:"Nenhum QR gerado ainda. O primeiro será o Nº 1.");
+ const at=L.filter(i=>i.destino).length,tot=L.reduce((s,i)=>s+i.leituras,0);
+ $("resumo").textContent=L.length?`${L.length} QR Codes · ${at} ativos · ${L.length-at} inativos · ${tot} leituras no total`:"";
+ const f=$("fl").value,l=$("l");l.innerHTML=L.length?"":"<p>Nenhum QR gerado ainda. Use a aba Gerar QR Codes.</p>";
+ L.filter(i=>f==="t"||(f==="a"?i.destino:!i.destino)).forEach(i=>{const d=document.createElement("div");d.className="it";
+  const inf=document.createElement("div");inf.className="inf";
+  const h=document.createElement("div");const b=document.createElement("b");b.textContent="Nº "+i.id;
+  const tg=document.createElement("span");tg.className="tg "+(i.destino?"on":"off");tg.textContent=i.destino?"ATIVO":"INATIVO";
+  const nm=document.createElement("strong");nm.textContent=i.nome;h.append(b,tg,nm);
+  const s1=document.createElement("small");s1.textContent=i.destino||"sem link (plaquinha ainda não ativada)";
+  const s2=document.createElement("small");s2.textContent=`${i.leituras} leitura(s)`+(i.ultima?` · última: ${new Date(i.ultima).toLocaleString("pt-BR")}`:"");
+  inf.append(h,s1,s2);
+  const bt=document.createElement("div");bt.className="bt";
+  const e=document.createElement("button");e.textContent=i.destino?"Editar":"Adicionar link";e.onclick=()=>{$("n").value=i.id;$("nm").value=i.nome;$("d").value=i.destino;$("d").focus();scrollTo(0,0)};
+  const p=document.createElement("button");p.textContent="PNG";p.onclick=()=>dl(i.id);bt.append(e,p);d.append(inf,bt);l.appendChild(d)})}
+$("fl").onchange=r2;
+function qrCanvas(n,px){
+ const qr=qrcode(0,"H");qr.addData(location.origin+RT+n);qr.make();
+ const c=qr.getModuleCount(),q=4,sc=Math.max(2,Math.round(px/(c+2*q))),W=(c+2*q)*sc,qs=c*sc;
+ const cv=document.createElement("canvas");cv.width=W;cv.height=W;const g=cv.getContext("2d");
+ g.fillStyle="#fff";g.fillRect(0,0,W,W);g.fillStyle="#000";
+ for(let y=0;y<c;y++)for(let x=0;x<c;x++)if(qr.isDark(y,x))g.fillRect((x+q)*sc,(y+q)*sc,sc,sc);
+ const t=String(n),bh=qs*0.15,maxw=qs*0.26;let fs=bh*0.78;const fam="Arial,sans-serif";g.font="800 "+fs+"px "+fam;
+ let tw=g.measureText(t).width;if(tw>maxw-bh*0.5){fs*=(maxw-bh*0.5)/tw;g.font="800 "+fs+"px "+fam;tw=g.measureText(t).width}
+ const bw=Math.max(bh,tw+bh*0.5),cx=W/2;g.fillStyle="#fff";g.fillRect(cx-bw/2,cx-bh/2,bw,bh);
+ g.fillStyle="#000";g.textAlign="center";g.textBaseline="middle";g.fillText(t,cx,cx+fs*0.04);return cv}
+function prev(de,ate){const pv=$("pv");pv.innerHTML="";for(let n=de;n<=Math.min(ate,de+5);n++)pv.appendChild(qrCanvas(n,300))}
+async function zip(de,ate){
+ if(!(de>=1)||!(ate>=de)||ate-de>499){$("m").textContent="Intervalo inválido (máx. 500)";return}
+ $("m").textContent="Preparando...";const z=new JSZip();prev(de,ate);
+ for(let n=de;n<=ate;n++){z.file(`qr-${pad(n)}.png`,qrCanvas(n,900).toDataURL("image/png").split(",")[1],{base64:true})}
+ const blob=await z.generateAsync({type:"blob"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+ a.download=`qr-${pad(de)}-a-${pad(ate)}.zip`;document.body.appendChild(a);a.click();a.remove();
+ $("m").textContent=`Pronto: QR Nº ${de} a ${ate} baixados.`}
+async function run(body){$("m").textContent="Aguarde...";try{const j=await call(body);draw(j);$("m").textContent=body.acao==="set"?"Salvo! Já está valendo.":($("m").textContent==="Aguarde..."?"":$("m").textContent);return j}catch(e){$("m").textContent="Erro: "+e.message}}
+$("gen2").onclick=async()=>{const j=await run({acao:"alocar",qtd:$("q").value});if(j&&j.de){prev(j.de,j.ate);$("m").textContent=`Gerados: QR Nº ${j.de} a ${j.ate} (${j.ate-j.de+1} QR Codes). Veja na aba "QR Codes e links" e baixe quando quiser.`}};
+$("gen").onclick=async()=>{const j=await run({acao:"alocar",qtd:$("q").value});if(j&&j.de)await zip(j.de,j.ate)};
+$("rb").onclick=async()=>{const j=await run({acao:"ver"});if(j)await zip(parseInt($("de").value),parseInt($("ate").value))};
+$("bz").onclick=()=>{const t=LST?LST.lista.length:0;if(!t){$("m").textContent="Nenhum QR gerado ainda";return}zip(1,t)};
+$("go").onclick=()=>{if(!$("n").value){$("m").textContent="Informe o número";return}run({acao:"set",id:$("n").value,destino:$("d").value,nome:$("nm").value})};
+$("ap").onclick=async()=>{if($("cf").value.trim()!=="APAGAR TUDO"){$("m").textContent="Digite exatamente APAGAR TUDO no campo acima do botão";return}
+ const j=await run({acao:"apagar_tudo",confirmar:"APAGAR TUDO"});if(j){$("cf").value="";$("m").textContent="Tudo apagado. A numeração voltou ao Nº 1."}};
+if($("s").value)run({acao:"ver"});
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
+</script></body></html>
